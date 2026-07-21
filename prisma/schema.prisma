@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SyncedCourse {
+  id          String             @id @db.Uuid
+  slug        String
+  publishedAt DateTime           @map("published_at") @db.Timestamptz(6)
+  syncedAt    DateTime           @default(now()) @map("synced_at") @db.Timestamptz(6)
+  items       CourseContentItem[]
+  references  ContentReference[]
+
+  @@map("synced_courses")
+}
+
+model CourseContentItem {
+  rowId               String       @id @default(dbgenerated("gen_random_uuid()")) @map("row_id") @db.Uuid
+  courseId            String       @map("course_id") @db.Uuid
+  itemId              String       @map("item_id") @db.Uuid
+  itemType            String       @map("item_type")
+  parentItemId        String?      @map("parent_item_id") @db.Uuid
+  position            Int
+  referencedContentId String?      @map("referenced_content_id") @db.Uuid
+  referencedType      String?      @map("referenced_type")
+  course              SyncedCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, itemType, itemId])
+  @@index([courseId, parentItemId])
+  @@index([referencedType, referencedContentId])
+  @@map("course_content_items")
+}
+
+model ContentReference {
+  rowId       String       @id @default(dbgenerated("gen_random_uuid()")) @map("row_id") @db.Uuid
+  courseId    String       @map("course_id") @db.Uuid
+  contentType String       @map("content_type")
+  contentId   String       @map("content_id") @db.Uuid
+  course      SyncedCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, contentType, contentId])
+  @@index([contentType, contentId])
+  @@map("content_references")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @map("event_id") @db.Uuid
+  eventType   String   @map("event_type")
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@map("processed_events")
+}
+
+model CourseItemProgress {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  itemId       String   @map("item_id") @db.Uuid
+  itemType     String   @map("item_type")
+  isCompleted  Boolean  @default(false) @map("is_completed")
+  wasFailed    Boolean  @default(false) @map("was_failed")
+  wasFailFixed Boolean  @default(false) @map("was_fail_fixed")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, itemType, itemId])
+  @@index([userId])
+  @@map("course_item_progress")
+}
+
+model ExerciseProgress {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  exerciseId     String   @map("exercise_id") @db.Uuid
+  isCompleted    Boolean  @default(false) @map("is_completed")
+  failedTimes    Int      @default(0) @map("failed_times")
+  completedTimes Int      @default(0) @map("completed_times")
+  bestScore      Float    @default(0) @map("best_score")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, exerciseId])
+  @@index([userId])
+  @@map("exercise_progress")
+}
+
+model ArticleProgress {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  articleId               String   @map("article_id") @db.Uuid
+  isCompleted             Boolean  @default(false) @map("is_completed")
+  exercisesCompletedCount Int      @default(0) @map("exercises_completed_count")
+  exercisesFailsCount     Int      @default(0) @map("exercises_fails_count")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, articleId])
+  @@index([userId])
+  @@map("article_progress")
+}

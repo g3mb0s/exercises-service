@@ -1,0 +1,8 @@
+import { readFileSync } from 'fs';
+export type Role = 'user' | 'manager' | 'admin';
+export interface Config { port: number; databaseUrl: string; kafkaBrokers: string[]; courseEventsTopic: string; kafkaGroupId: string; jwtPublicKey: string | null; authPublicKeyUrl: string; contentServiceUrl: string; }
+export function getConfig(): Config { return { port: numberEnv('PORT', 8002), databaseUrl: stringEnv('DATABASE_URL', 'postgres://exercise:exercise@localhost:5434/exercise'), kafkaBrokers: stringEnv('KAFKA_BROKERS', 'localhost:9092').split(',').map((value) => value.trim()).filter(Boolean), courseEventsTopic: stringEnv('COURSE_EVENTS_TOPIC', 'content.course-events'), kafkaGroupId: stringEnv('KAFKA_GROUP_ID', 'exercise-service-content-registry'), jwtPublicKey: optionalKeyEnv('JWT_PUBLIC_KEY', 'JWT_PUBLIC_KEY_PATH'), authPublicKeyUrl: stringEnv('AUTH_PUBLIC_KEY_URL', 'http://localhost:8000/auth/public-key'), contentServiceUrl: stringEnv('CONTENT_SERVICE_URL', 'http://localhost:8001') }; }
+export function isRole(value: unknown): value is Role { return value === 'user' || value === 'manager' || value === 'admin'; }
+function stringEnv(key: string, fallback: string) { return process.env[key]?.trim() || fallback; }
+function numberEnv(key: string, fallback: number) { const value = Number(stringEnv(key, String(fallback))); if (!Number.isInteger(value) || value <= 0) throw new Error(`${key} must be a positive integer`); return value; }
+function optionalKeyEnv(valueKey: string, pathKey: string): string | null { const value = process.env[valueKey]?.trim(); if (value) return value.replace(/\\n/g, '\n'); const path = process.env[pathKey]?.trim(); return path ? readFileSync(path, 'utf8') : null; }
