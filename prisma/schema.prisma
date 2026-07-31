@@ -97,3 +97,40 @@ model ArticleProgress {
   @@index([userId])
   @@map("article_progress")
 }
+
+model SyncedMovie {
+  id           String            @id @db.Uuid
+  title        String
+  thumbnailUrl String?           @map("thumbnail_url")
+  durationMs   Int?              @map("duration_ms")
+  syncedAt     DateTime          @default(now()) @map("synced_at") @db.Timestamptz(6)
+  clips        SyncedMovieClip[]
+
+  @@map("synced_movies")
+}
+
+model SyncedMovieClip {
+  id       String      @id @db.Uuid
+  movieId  String      @map("movie_id") @db.Uuid
+  position Int
+  startMs  Int         @map("start_ms")
+  endMs    Int         @map("end_ms")
+  movie    SyncedMovie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  studies  ClipStudy[]
+
+  @@unique([movieId, position])
+  @@index([movieId, startMs])
+  @@map("synced_movie_clips")
+}
+
+model ClipStudy {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String          @map("user_id") @db.Uuid
+  clipId    String          @map("clip_id") @db.Uuid
+  startedAt DateTime        @default(now()) @map("started_at") @db.Timestamptz(6)
+  clip      SyncedMovieClip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clipId])
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("clip_studies")
+}

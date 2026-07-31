@@ -44,3 +44,19 @@
 ```
 
 `content_service` writes this payload to its transactional outbox in the same database transaction that publishes the course. `exercise_service` replaces the corresponding local snapshot in one transaction and records `eventId`; duplicate delivery is a no-op.
+
+# Movie lifecycle Kafka contract
+
+## Transport
+
+- Topic: `content.movie-events`
+- Message key: movie UUID
+- Contract version: `1`
+
+## Ready movie
+
+Event type `content.movie.processing.completed` is published after HLS, subtitles, and clips are committed. The payload contains the movie UUID, duration, and clip count. `exercise_service` uses the UUID to fetch the canonical ready-movie snapshot from `content_service`, then transactionally replaces its local movie and clip registry and records `eventId`.
+
+## Deleted or unavailable movie
+
+Event types `content.movie.deleted` and `content.movie.processing.failed` remove the corresponding local movie snapshot. The cascading foreign keys remove clip-study rows that can no longer reference a playable clip. Duplicate events are ignored through `processed_events`.
