@@ -14,6 +14,22 @@ export class SrsController {
     return this.srs.getNew(user.id, limit);
   }
 
+  @Get('words')
+  getWords(
+    @CurrentUser() user: AuthUser,
+    @Query('status') status?: string,
+    @Query('errors_only') errorsOnly?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.srs.getWords(user.id, {
+      status: parseWordStatus(status),
+      errors_only: parseBooleanQuery('errors_only', errorsOnly),
+      limit: parseWordsLimit(limit),
+      offset: parseWordsOffset(offset),
+    });
+  }
+
   @Get('words/stats')
   stats(@CurrentUser() user: AuthUser) {
     return this.srs.getStats(user.id);
@@ -67,4 +83,57 @@ export class SrsController {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+const WORD_STATUSES = [
+  'new',
+  'learning',
+  'single_review',
+  'recent',
+  'due',
+  'learned',
+  'long_learned',
+  'known',
+] as const;
+
+function parseWordStatus(value?: string): string | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (!(WORD_STATUSES as readonly string[]).includes(value)) {
+    throw new BadRequestException(
+      `status must be one of: ${WORD_STATUSES.join(', ')}`,
+    );
+  }
+  return value;
+}
+
+function parseBooleanQuery(name: string, value?: string): boolean {
+  if (value === undefined || value === '') return false;
+  if (value !== 'true' && value !== 'false') {
+    throw new BadRequestException(`${name} must be a boolean`);
+  }
+  return value === 'true';
+}
+
+function parseWordsLimit(value?: string): number {
+  if (value === undefined || value === '') return 10;
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException('limit must be an integer between 1 and 50');
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 50) {
+    throw new BadRequestException('limit must be an integer between 1 and 50');
+  }
+  return parsed;
+}
+
+function parseWordsOffset(value?: string): number {
+  if (value === undefined || value === '') return 0;
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException('offset must be a non-negative integer');
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new BadRequestException('offset must be a non-negative integer');
+  }
+  return parsed;
 }

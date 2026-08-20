@@ -8,6 +8,14 @@ const INTERVALS_BY_SUBJECT: Record<string, number[]> = {
 };
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface GetWordsParams {
+  status?: string;
+  errors_only?: boolean;
+  limit?: number;
+  offset?: number;
+}
 
 @Injectable()
 export class SrsService {
@@ -112,6 +120,132 @@ export class SrsService {
         ...toWordContent(word),
         card: newCardState(),
       })),
+    };
+  }
+
+  /**
+   * Слова пользователя с SRS-статистикой для тула get_user_words ИИ-чата.
+   *
+   * Семантика статусов (замечание 7):
+   * - new          — слова из категорий пользователя без карточки, порядок по word ASC;
+   *                  пустые категории → пустой список (семантика getNew).
+   * - learning     — карточки со status='learning'.
+   * - single_review — карточки с reviewCount==1.
+   * - recent       — карточки со startedAt >= now()-7 дней.
+   * - due          — status='learning' AND nextReviewAt <= now().
+   * - learned      — карточки со status='learned'.
+   * - long_learned — status='learned' AND lastReviewedAt < now()-30 дней.
+   * - known        — карточки со status='known'.
+   * - не задан     — все карточки пользователя (кроме new).
+   * errors_only=true → errorCount > 0; с status=new всегда пусто.
+   * Пагинация: limit/offset/total (total по тем же фильтрам до пагинации).
+   */
+  async getWords(userId: string, params: GetWordsParams) {
+    const limit = params.limit ?? DEFAULT_LIMIT;
+    const offset = params.offset ?? 0;
+    const errorsOnly = params.errors_only ?? false;
+    const status = params.status;
+
+    if (status === 'new') {
+      if (errorsOnly) return { items: [], total: 0, offset, limit };
+      return this.getNewWordsPage(userId, limit, offset);
+    }
+
+    const now = new Date();
+    const where: Prisma.SrsCardWhereInput = { userId, subjectType: 'word' };
+    if (status) {
+      switch (status) {
+        case 'learning':
+          where.status = 'learning';
+          break;
+        case 'single_review':
+          where.reviewCount = 1;
+          break;
+        case 'recent':
+          where.startedAt = { gte: new Date(now.getTime() - 7 * DAY_MS) };
+          break;
+        case 'due':
+          where.status = 'learning';
+          where.nextReviewAt = { lte: now };
+          break;
+        case 'learned':
+          where.status = 'learned';
+          break;
+        case 'long_learned':
+          where.status = 'learned';
+          where.lastReviewedAt = { lt: new Date(now.getTime() - 30 * DAY_MS) };
+          break;
+        case 'known':
+          where.status = 'known';
+          break;
+      }
+    }
+    if (errorsOnly) {
+      where.errorCount = { gt: 0 };
+    }
+
+    const cards = await this.prisma.srsCard.findMany({
+      where,
+      orderBy: { startedAt: 'asc' },
+    });
+    if (cards.length === 0) return { items: [], total: 0, offset, limit };
+
+    const words = await this.prisma.syncedWord.findMany({
+      where: { id: { in: cards.map((card) => card.subjectId) } },
+    });
+    const wordById = new Map(words.map((word) => [word.id, word]));
+    const joined = cards
+      .map((card) => ({ card, word: wordById.get(card.subjectId) }))
+      .filter((entry): entry is { card: (typeof cards)[number]; word: NonNullable<typeof entry.word> } => entry.word !== undefined)
+      .sort((a, b) => {
+        const byStartedAt = a.card.startedAt.getTime() - b.card.startedAt.getTime();
+        if (byStartedAt !== 0) return byStartedAt;
+        return a.word.word.localeCompare(b.word.word);
+      });
+    // total считается по тому же join/фильтру, что и items: карточки без
+    // строки в synced_words отбрасываются и из пагинации, и из общего числа.
+    const total = joined.length;
+    const page = joined.slice(offset, offset + limit);
+    return {
+      items: page.map(({ card, word }) => ({
+        ...toWordContent(word),
+        card: toCardResponse(card),
+      })),
+      total,
+      offset,
+      limit,
+    };
+  }
+
+  private async getNewWordsPage(userId: string, limit: number, offset: number) {
+    const preferences = await this.prisma.wordLearningPreference.findUnique({ where: { userId } });
+    const categorySlugs = preferences?.categorySlugs ?? [];
+    if (categorySlugs.length === 0) return { items: [], total: 0, offset, limit };
+
+    const existingCards = await this.prisma.srsCard.findMany({
+      where: { userId, subjectType: 'word' },
+      select: { subjectId: true },
+    });
+    const existingIds = existingCards.map((card) => card.subjectId);
+    const where: Prisma.SyncedWordWhereInput = {
+      categories: { hasSome: categorySlugs },
+      ...(existingIds.length > 0 ? { id: { notIn: existingIds } } : {}),
+    };
+
+    const [total, words] = await Promise.all([
+      this.prisma.syncedWord.count({ where }),
+      this.prisma.syncedWord.findMany({
+        where,
+        orderBy: { word: 'asc' },
+        skip: offset,
+        take: limit,
+      }),
+    ]);
+    return {
+      items: words.map((word) => ({ ...toWordContent(word), card: newCardState() })),
+      total,
+      offset,
+      limit,
     };
   }
 
