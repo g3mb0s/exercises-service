@@ -10,5 +10,9 @@ import { ClipStudyController } from './movies/clip-study.controller';
 import { ClipStudyService } from './movies/clip-study.service';
 import { MovieEventsConsumer } from './movies/movie-events.consumer';
 import { MovieRegistryService } from './movies/movie-registry.service';
-@Module({ imports: [PrismaModule, AuthModule], controllers: [RegistryController, ProgressController, ClipStudyController], providers: [CourseRegistryService, CourseEventsConsumer, ProgressService, MovieRegistryService, MovieEventsConsumer, ClipStudyService] })
+import { SrsController } from './srs/srs.controller';
+import { SrsService } from './srs/srs.service';
+import { WordEventsConsumer } from './words/word-events.consumer';
+import { WordRegistryService } from './words/word-registry.service';
+@Module({ imports: [PrismaModule, AuthModule], controllers: [RegistryController, ProgressController, ClipStudyController, SrsController], providers: [CourseRegistryService, CourseEventsConsumer, ProgressService, MovieRegistryService, MovieEventsConsumer, ClipStudyService, WordRegistryService, WordEventsConsumer, SrsService] })
 export class AppModule {}

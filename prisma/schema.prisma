@@ -134,3 +134,53 @@ model ClipStudy {
   @@index([userId, startedAt(sort: Desc)])
   @@map("clip_studies")
 }
+
+model SyncedWordCategory {
+  slug      String   @id
+  nameRu    String?  @map("name_ru")
+  nameEn    String?  @map("name_en")
+  syncedAt  DateTime @default(now()) @map("synced_at") @db.Timestamptz(6)
+
+  @@map("synced_word_categories")
+}
+
+model SyncedWord {
+  id           String   @id @db.Uuid
+  word         String
+  translation  String
+  transcription String?
+  examples     Json     @default("[]")
+  categories   String[] @default([])
+  syncedAt     DateTime @default(now()) @map("synced_at") @db.Timestamptz(6)
+
+  @@index([categories])
+  @@map("synced_words")
+}
+
+model SrsCard {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  subjectType    String    @map("subject_type")
+  subjectId      String    @map("subject_id") @db.Uuid
+  status         String    @default("learning")
+  stage          Int       @default(0)
+  reviewCount    Int       @default(0) @map("review_count")
+  errorCount     Int       @default(0) @map("error_count")
+  lastAnswerWrong Boolean   @default(false) @map("last_answer_wrong")
+  nextReviewAt   DateTime? @map("next_review_at") @db.Timestamptz(6)
+  lastReviewedAt DateTime? @map("last_reviewed_at") @db.Timestamptz(6)
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, subjectType, subjectId])
+  @@index([userId, status, nextReviewAt])
+  @@map("srs_cards")
+}
+
+model WordLearningPreference {
+  userId        String   @id @map("user_id") @db.Uuid
+  categorySlugs String[] @default([]) @map("category_slugs")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("word_learning_preferences")
+}
